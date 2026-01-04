@@ -1,34 +1,71 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BithubService } from '../services/bithub';
+import axios from 'axios';
 
-vi.mock('@elizaos/core', () => ({ Service: class {}, ServiceType: {}, IAgentRuntime: {} }));
+vi.mock('axios', () => ({
+    default: {
+        get: vi.fn(),
+        post: vi.fn(),
+    },
+    get: vi.fn(),
+    post: vi.fn(),
+}));
 
 describe('BithubService: Hardened Tests', () => {
-    const mockRuntime = { getSetting: (key: string) => key === 'BITHUB_USER_API_KEY' ? 'mock-key' : 'https://hub.bitwiki.org' } as any;
+    const mockRuntime = { 
+        getSetting: (key: string) => key === 'BITHUB_USER_API_KEY' ? 'mock-key' : 'https://hub.bitwiki.org' 
+    } as any;
 
     beforeEach(() => {
-        vi.stubGlobal('fetch', vi.fn());
+        vi.clearAllMocks();
     });
 
-    it('should handle 429 with fresh response on retry', async () => {
+    it('should initialize correctly', async () => {
+        const service = new BithubService();
+        await service.initialize(mockRuntime);
+        expect(service.serviceType).toBe('bithub');
+    });
+
+    it('should fetch a topic successfully', async () => {
         const service = new BithubService();
         await service.initialize(mockRuntime);
 
-        vi.mocked(fetch)
-            .mockImplementationOnce(() => Promise.resolve(new Response(null, { status: 429, headers: { 'Retry-After': '0' } })))
-            .mockImplementationOnce(() => Promise.resolve(new Response(JSON.stringify({ success: true }))));
+        const mockData = { id: 1, title: 'Test Topic' };
+        (axios.get as any).mockResolvedValueOnce({ data: mockData });
 
         const result = await service.getTopic(1);
-        expect(result.success).toBe(true);
-        expect(fetch).toHaveBeenCalledTimes(2);
+        expect(result).toEqual(mockData);
+        expect(axios.get).toHaveBeenCalledWith('https://hub.bitwiki.org/t/1.json');
     });
 
-    it('should fail on persistent 500 errors', async () => {
+    it('should send a private message successfully', async () => {
         const service = new BithubService();
         await service.initialize(mockRuntime);
 
-        vi.mocked(fetch).mockImplementation(() => Promise.resolve(new Response('Error', { status: 500 })));
+        (axios.post as any).mockResolvedValueOnce({ status: 200 });
 
-        await expect(service.getTopic(1)).rejects.toThrow('Bithub API Error (500)');
+        const success = await service.sendPrivateMessage({
+            recipients: ['operator'],
+            title: 'Alert',
+            raw: 'Core overheating'
+        });
+
+        expect(success).toBe(true);
+        expect(axios.post).toHaveBeenCalled();
+    });
+
+    it('should handle API errors gracefully', async () => {
+        const service = new BithubService();
+        await service.initialize(mockRuntime);
+
+        (axios.post as any).mockRejectedValueOnce(new Error('Network Error'));
+
+        const success = await service.sendPrivateMessage({
+            recipients: ['operator'],
+            title: 'Alert',
+            raw: 'Core overheating'
+        });
+
+        expect(success).toBe(false);
     });
 });

@@ -1,5 +1,7 @@
 # 🧠 elizaos.b8-plugin: The Neural Net Link (TypeScript)
 
+
+
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Status: Active](https://img.shields.io/badge/Status-Active-success.svg)]()
 [![System: Holobiont](https://img.shields.io/badge/System-Holobiont-blueviolet.svg)]()

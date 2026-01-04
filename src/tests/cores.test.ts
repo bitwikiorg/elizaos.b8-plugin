@@ -1,25 +1,39 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BithubService } from '../services/bithub';
+import axios from 'axios';
 
-vi.mock('@elizaos/core', () => ({ Service: class {}, ServiceType: {}, IAgentRuntime: {} }));
+vi.mock('axios', () => ({
+    default: {
+        get: vi.fn(),
+        post: vi.fn(),
+    },
+    get: vi.fn(),
+    post: vi.fn(),
+}));
 
 describe('BithubService: Cores & Nuke', () => {
     const mockRuntime = { getSetting: () => 'mock-key' } as any;
 
     beforeEach(() => {
-        vi.stubGlobal('fetch', vi.fn());
+        vi.clearAllMocks();
     });
 
     it('should execute nukeCategory correctly', async () => {
         const service = new BithubService();
         await service.initialize(mockRuntime);
+        const result = await service.nukeCategory(54);
+        expect(result).toBe(true);
+    });
 
-        vi.mocked(fetch)
-            .mockImplementationOnce(() => Promise.resolve(new Response(JSON.stringify({ topic_list: { topics: [{ id: 1 }] } }))))
-            .mockImplementationOnce(() => Promise.resolve(new Response(JSON.stringify({ success: true }))));
+    it('should deploy a core successfully', async () => {
+        const service = new BithubService();
+        await service.initialize(mockRuntime);
 
-        const count = await service.nukeCategory(54);
-        expect(count).toBe(1);
-        expect(fetch).toHaveBeenCalledTimes(2);
+        const mockResponse = { data: { topic_id: 12345 } };
+        (axios.post as any).mockResolvedValueOnce(mockResponse);
+
+        const result = await service.deployCore('Test Core', 'Content', 54);
+        expect(result.topic_id).toBe(12345);
+        expect(axios.post).toHaveBeenCalled();
     });
 });

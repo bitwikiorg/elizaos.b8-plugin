@@ -1,35 +1,48 @@
-/**
- * WHY: To provide the agent with awareness of other agents (Neurons) in the swarm.
- * WHAT: An ElizaOS Provider that fetches the agent registry from Bithub.
- * HOW: Uses BithubService to fetch and parse the registry topic; follows Guard -> Do -> Verify.
- */
+import { IAgentRuntime, Memory, Provider, State, ProviderResult } from '@elizaos/core';
+import * as fs from 'fs';
+import * as path from 'path';
 
-import { IAgentRuntime, Memory, Provider, State, ServiceType } from '@elizaos/core';
-import { BithubService } from '../services/bithub';
+interface Bot {
+    type: string;
+    name: string;
+    username: string;
+    description: string;
+    provider: string;
+}
+
+let botCache: Bot[] | null = null;
+let lastFetch = 0;
+const CACHE_TTL = 1000 * 60 * 60; // 1 hour
 
 export const swarmRegistryProvider: Provider = {
-    get: async (runtime: IAgentRuntime, _message: Memory, _state?: State) => {
-        // Guard: Retrieve Service
-        const service = runtime.getService<BithubService>('bithub' as ServiceType);
-        if (!service) return 'Bithub Service unavailable.';
-
-        try {
-            // Do: Fetch registry topic
-            const topic = await service.getTopic(30145);
-            const firstPostId = topic.post_stream?.posts?.[0]?.id;
-            if (!firstPostId) return 'Bithub Registry: Empty.';
-
-            const post = await service.getPost(firstPostId);
-            const bots = service.parseMarkdownTable(post.raw || '');
-
-            // Verify: Format and return
-            let output = 'Available Swarm Agents:\n';
-            bots.forEach((bot: any) => {
-                output += `- @${bot.username} (${bot.name}) [${bot.type.toUpperCase()}]\n`;
-            });
-            return output;
-        } catch (e) {
-            return 'Bithub Registry: Fetch failed.';
+    name: 'registry',
+    get: async (runtime: IAgentRuntime, _message: Memory, _state?: State): Promise<ProviderResult> => {
+        const now = Date.now();
+        
+        if (!botCache || (now - lastFetch) > CACHE_TTL) {
+            try {
+                const registryPath = path.join(process.cwd(), 'elizaos.b8-plugin', 'resources', 'bot_registry.json');
+                if (fs.existsSync(registryPath)) {
+                    const data = fs.readFileSync(registryPath, 'utf-8');
+                    botCache = JSON.parse(data);
+                    lastFetch = now;
+                } else {
+                    return { text: 'Bithub Registry: bot_registry.json not found.' };
+                }
+            } catch (e) {
+                return { text: 'Bithub Registry: Failed to read local registry.' };
+            }
         }
+
+        if (!botCache || botCache.length === 0) {
+            return { text: 'Bithub Registry: Empty.' };
+        }
+
+        let output = 'Available Swarm Agents (Local Cache):\n';
+        botCache.forEach((bot: Bot) => {
+            output += `- @${bot.username} (${bot.name}) [${bot.type.toUpperCase()}] - ${bot.description}\n`;
+        });
+
+        return { text: output };
     }
 };
