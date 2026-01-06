@@ -1,36 +1,29 @@
 import axios from "axios";
-import { Service, IAgentRuntime, ServiceTypeName } from "@elizaos/core";
-import { SendPrivateMessage } from "../types/bithub";
-
+import { Service } from "@elizaos/core";
 export class BithubService extends Service {
-    static serviceType: ServiceTypeName = "bithub" as ServiceTypeName;
-
-    get serviceType(): ServiceTypeName {
+    static serviceType = "bithub";
+    get serviceType() {
         return BithubService.serviceType;
     }
-
-    private apiKey: string | null = null;
-    private baseUrl: string = "https://hub.bitwiki.org";
-
-    constructor(runtime?: IAgentRuntime) {
+    apiKey = null;
+    baseUrl = "https://hub.bitwiki.org";
+    constructor(runtime) {
         super(runtime);
     }
-
-    get capabilityDescription(): string {
+    get capabilityDescription() {
         return "Bithub service for interacting with Discourse-based Bithub instances.";
     }
-
-    async initialize(runtime: IAgentRuntime): Promise<void> {
-        this.apiKey = runtime.getSetting("BITHUB_USER_API_KEY") as string;
+    async initialize(runtime) {
+        this.apiKey = runtime.getSetting("BITHUB_USER_API_KEY");
         const baseUrl = runtime.getSetting("BITHUB_BASE_URL");
-        if (baseUrl) this.baseUrl = (baseUrl as string).replace(/\/$/, "");
+        if (baseUrl)
+            this.baseUrl = baseUrl.replace(/\/$/, "");
         console.log("[BithubService] Initialized successfully.");
     }
-
-    async stop(): Promise<void> {}
-
-    async sendMessage(target: string, content: string, categoryId: number = 2): Promise<boolean> {
-        if (!this.apiKey) return false;
+    async stop() { }
+    async sendMessage(target, content, categoryId = 2) {
+        if (!this.apiKey)
+            return false;
         try {
             const response = await axios.post(`${this.baseUrl}/posts.json`, {
                 raw: content,
@@ -41,13 +34,14 @@ export class BithubService extends Service {
                 headers: { "User-Api-Key": this.apiKey, "Content-Type": "application/json" }
             });
             return response.status === 200;
-        } catch (error) {
+        }
+        catch (error) {
             return false;
         }
     }
-
-    async deployCore(title: string, raw: string, category_id: number): Promise<any> {
-        if (!this.apiKey) throw new Error("API Key missing");
+    async deployCore(title, raw, category_id) {
+        if (!this.apiKey)
+            throw new Error("API Key missing");
         const response = await axios.post(`${this.baseUrl}/posts.json`, {
             title, raw, category: category_id, archetype: "regular"
         }, {
@@ -55,9 +49,9 @@ export class BithubService extends Service {
         });
         return response.data;
     }
-
-    async sendPrivateMessage(payload: SendPrivateMessage): Promise<boolean> {
-        if (!this.apiKey) return false;
+    async sendPrivateMessage(payload) {
+        if (!this.apiKey)
+            return false;
         try {
             const cleanRecipients = payload.recipients.map(r => r.replace("@", "")).join(",");
             const response = await axios.post(`${this.baseUrl}/posts.json`, {
@@ -69,29 +63,29 @@ export class BithubService extends Service {
                 headers: { "User-Api-Key": this.apiKey, "Content-Type": "application/json" }
             });
             return response.status === 200;
-        } catch (error) {
+        }
+        catch (error) {
             return false;
         }
     }
-
-    async sendChatMessage(channelId: number, message: string): Promise<boolean> {
-        if (!this.apiKey) return false;
+    async sendChatMessage(channelId, message) {
+        if (!this.apiKey)
+            return false;
         try {
             const response = await axios.post(`${this.baseUrl}/chat/${channelId}.json`, { message }, {
                 headers: { "User-Api-Key": this.apiKey, "Content-Type": "application/json" }
             });
             return response.status === 200;
-        } catch (error) {
+        }
+        catch (error) {
             return false;
         }
     }
-
-    async getTopic(id: number): Promise<any> {
+    async getTopic(id) {
         const response = await axios.get(`${this.baseUrl}/t/${id}.json`);
         return response.data;
     }
-
-    async getPost(id: number): Promise<any> {
+    async getPost(id) {
         const response = await axios.get(`${this.baseUrl}/posts/${id}.json`);
         return response.data;
     }
