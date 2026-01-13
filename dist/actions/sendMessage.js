@@ -9,30 +9,68 @@ export const sendMessageAction = {
     similes: ['SEND_BITHUB_MESSAGE', 'MESSAGE_AGENT', 'PRIVATE_MESSAGE', 'DM_AGENT'],
     description: 'Send a private message to one or more agents in the Bithub swarm. Usage: /send <recipient> "<title>" <body>',
     validate: async (runtime, message) => {
-        const text = message.content.text?.trim();
-        const hasKey = !!runtime.getSetting('BITHUB_USER_API_KEY');
-        // Strict '/' prefix validation as per CoralineRefactorer protocols
-        return !!text && text.startsWith('/send') && hasKey;
+        // Validation checks prerequisites only, not input format
+        // Action should be available whenever API key is configured
+        // This allows both slash commands (/send) and LLM-triggered natural language
+        return !!runtime.getSetting('BITHUB_USER_API_KEY');
     },
     handler: async (runtime, message, state, _options = {}, callback) => {
         const service = runtime.getService('bithub');
         const text = message.content.text?.trim();
         if (!text)
             return { text: "No message text provided", success: false };
-        // Regex for: /send @recipient "Title with spaces" Body starts here
-        const match = text.match(/^\/send\s+(@?[\w\d_-]+)\s+(?:"([^"]+)"|(\S+))\s+(.*)$/s);
-        if (!match) {
-            const errorText = "Invalid format. Use: /send <recipient> \"<title>\" <body>";
+        // Mode 1: Slash command (/send @recipient "title" body)
+        if (text.startsWith('/send')) {
+            const match = text.match(/^\/send\s+(@?[\w\d_-]+)\s+(?:"([^"]+)"|(\S+))\s+(.*)$/s);
+            if (!match) {
+                const errorText = "Invalid format. Use: /send <recipient> \"<title>\" <body>";
+                if (callback)
+                    callback({ text: errorText });
+                return { text: errorText, success: false };
+            }
+            const recipient = match[1];
+            const title = match[2] || match[3];
+            const body = match[4];
+            try {
+                const validated = SendMessageSchema.parse({
+                    recipients: [recipient],
+                    title: title,
+                    raw: body
+                });
+                const success = await service.sendPrivateMessage({
+                    recipients: validated.recipients,
+                    title: validated.title,
+                    raw: validated.raw
+                });
+                if (success) {
+                    const resultText = `Successfully sent message to ${validated.recipients.join(', ')}: "${validated.title}"`;
+                    if (callback)
+                        callback({ text: resultText, content: validated });
+                    return { text: resultText, success: true };
+                }
+                throw new Error("Bithub API returned failure status.");
+            }
+            catch (error) {
+                const errorText = `Failed to send message: ${error.message}`;
+                if (callback)
+                    callback({ text: errorText });
+                return { text: errorText, success: false };
+            }
+        }
+        // Mode 2: Natural language (LLM-triggered) - Extract @mentions
+        const mentions = text.match(/@([\w\d_-]+)/g);
+        if (!mentions || mentions.length === 0) {
+            const errorText = "No recipient found. Please specify using @username or use: /send <recipient> \"<title>\" <body>";
             if (callback)
                 callback({ text: errorText });
             return { text: errorText, success: false };
         }
-        const recipient = match[1];
-        const title = match[2] || match[3];
-        const body = match[4];
+        const recipients = mentions.map(m => m.substring(1)); // Remove @ prefix
+        const title = `Query from ${runtime.character.name}`;
+        const body = text;
         try {
             const validated = SendMessageSchema.parse({
-                recipients: [recipient],
+                recipients: recipients,
                 title: title,
                 raw: body
             });
@@ -42,7 +80,7 @@ export const sendMessageAction = {
                 raw: validated.raw
             });
             if (success) {
-                const resultText = `Successfully sent message to ${validated.recipients.join(', ')}: "${validated.title}"`;
+                const resultText = `Successfully consulted ${validated.recipients.map(r => '@' + r).join(', ')}: "${validated.title}"`;
                 if (callback)
                     callback({ text: resultText, content: validated });
                 return { text: resultText, success: true };

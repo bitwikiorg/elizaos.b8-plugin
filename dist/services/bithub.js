@@ -7,6 +7,11 @@ export class BithubService extends Service {
     }
     apiKey = null;
     baseUrl = "https://hub.bitwiki.org";
+    static async start(runtime) {
+        const service = new BithubService(runtime);
+        await service.initialize(runtime);
+        return service;
+    }
     constructor(runtime) {
         super(runtime);
     }

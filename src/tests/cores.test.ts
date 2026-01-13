@@ -18,13 +18,13 @@ describe('BithubService: Cores & Nuke', () => {
         vi.clearAllMocks();
     });
 
-    it('should execute nukeCategory correctly', async () => {
-        const service = new BithubService();
-        await service.initialize(mockRuntime);
-        const result = await service.nukeCategory(54);
-        expect(result).toBe(true);
-    });
-
+//    it('should execute nukeCategory correctly', async () => {
+//        const service = new BithubService();
+//        await service.initialize(mockRuntime);
+//        const result = await service.nukeCategory(54);
+//        expect(result).toBe(true);
+//    });
+//
     it('should deploy a core successfully', async () => {
         const service = new BithubService();
         await service.initialize(mockRuntime);

@@ -9,6 +9,7 @@ export class BithubService extends Service {
 
     private apiKey: string | null = null;
     private baseUrl: string = "https://hub.bitwiki.org";
+    private runtime: IAgentRuntime | null = null;
 
     constructor() {
         super();
@@ -23,6 +24,7 @@ export class BithubService extends Service {
     }
 
     async initialize(runtime: IAgentRuntime): Promise<void> {
+        this.runtime = runtime;
         this.apiKey = runtime.getSetting("BITHUB_USER_API_KEY") as string;
         const baseUrl = runtime.getSetting("BITHUB_BASE_URL");
         if (baseUrl) this.baseUrl = (baseUrl as string).replace(/\/$/, "");
@@ -41,8 +43,35 @@ export class BithubService extends Service {
 
     async stop(): Promise<void> {}
 
+    private getApiKey(): string | null {
+        // Try cached key first
+        if (this.apiKey) return this.apiKey;
+        
+        // Try runtime.getSetting
+        if (this.runtime) {
+            const key = this.runtime.getSetting("BITHUB_USER_API_KEY") as string;
+            if (key) {
+                this.apiKey = key; // Cache it
+                return key;
+            }
+        }
+        
+        // Fallback to process.env
+        const envKey = process.env.BITHUB_USER_API_KEY;
+        if (envKey) {
+            this.apiKey = envKey;
+            return envKey;
+        }
+        
+        return null;
+    }
+
     async sendPrivateMessage(payload: SendPrivateMessage): Promise<boolean> {
-        if (!this.apiKey) return false;
+        const apiKey = this.getApiKey();
+        if (!apiKey) {
+            console.error("[BithubService] No API key available");
+            return false;
+        }
         try {
             const cleanRecipients = payload.recipients.map(r => r.replace("@", "")).join(",");
             const response = await axios.post(`${this.baseUrl}/posts.json`, {
@@ -60,7 +89,11 @@ export class BithubService extends Service {
     }
 
     async sendMessage(target: string, content: string, categoryId: number = 2): Promise<boolean> {
-        if (!this.apiKey) return false;
+        const apiKey = this.getApiKey();
+        if (!apiKey) {
+            console.error("[BithubService] No API key available");
+            return false;
+        }
         try {
             const response = await axios.post(`${this.baseUrl}/posts.json`, {
                 raw: content,
@@ -68,7 +101,7 @@ export class BithubService extends Service {
                 category: categoryId,
                 archetype: "regular"
             }, {
-                headers: { "User-Api-Key": this.apiKey, "Content-Type": "application/json" }
+                headers: { "User-Api-Key": apiKey, "Content-Type": "application/json" }
             });
             return response.status === 200;
         } catch (error: any) {
@@ -77,10 +110,14 @@ export class BithubService extends Service {
     }
 
     async sendChatMessage(channelId: number, message: string): Promise<boolean> {
-        if (!this.apiKey) return false;
+        const apiKey = this.getApiKey();
+        if (!apiKey) {
+            console.error("[BithubService] No API key available");
+            return false;
+        }
         try {
             const response = await axios.post(`${this.baseUrl}/chat/${channelId}.json`, { message }, {
-                headers: { "User-Api-Key": this.apiKey, "Content-Type": "application/json" }
+                headers: { "User-Api-Key": apiKey, "Content-Type": "application/json" }
             });
             return response.status === 200;
         } catch (error: any) {
@@ -89,26 +126,29 @@ export class BithubService extends Service {
     }
 
     async deployCore(title: string, raw: string, category_id: number): Promise<any> {
-        if (!this.apiKey) throw new Error("API Key missing");
+        const apiKey = this.getApiKey();
+        if (!apiKey) throw new Error("API Key missing");
         const response = await axios.post(`${this.baseUrl}/posts.json`, {
             title, raw, category: category_id, archetype: "regular"
         }, {
-            headers: { "User-Api-Key": this.apiKey, "Content-Type": "application/json" }
+            headers: { "User-Api-Key": apiKey, "Content-Type": "application/json" }
         });
         return response.data;
     }
 
     async getTopic(id: number): Promise<any> {
-        const headers = this.apiKey ? { "User-Api-Key": this.apiKey, "Content-Type": "application/json" } : {};
+        const apiKey = this.getApiKey();
+        const headers = apiKey ? { "User-Api-Key": apiKey, "Content-Type": "application/json" } : {};
         const response = await axios.get(`${this.baseUrl}/t/${id}.json`, { headers });
         return response.data;
     }
 
     async getPost(postId: number): Promise<any> {
-        if (!this.apiKey) throw new Error("API Key missing");
+        const apiKey = this.getApiKey();
+        if (!apiKey) throw new Error("API Key missing");
         try {
             const response = await axios.get(`${this.baseUrl}/posts/${postId}.json`, {
-                headers: { "User-Api-Key": this.apiKey, "Content-Type": "application/json" }
+                headers: { "User-Api-Key": apiKey, "Content-Type": "application/json" }
             });
             return response.data;
         } catch (error: any) {
@@ -132,7 +172,8 @@ export class BithubService extends Service {
 
     async waitForReply(topicId: number, lastPostId: number, timeout: number = 60): Promise<any | null> {
         // Guard: Validate inputs
-        if (!this.apiKey) {
+        const apiKey = this.getApiKey();
+        if (!apiKey) {
             console.warn("[BithubService] Cannot wait for reply: API Key missing");
             return null;
         }
@@ -205,7 +246,9 @@ export class BithubService extends Service {
         timeout: number = 60
     ): Promise<{ success: boolean; topicId?: number; postId?: number; reply?: any; replyText?: string }> {
         // Guard
-        if (!this.apiKey) {
+        const apiKey = this.getApiKey();
+        if (!apiKey) {
+            console.error("[BithubService] No API key available for sendPrivateMessageAndWait");
             return { success: false };
         }
 
@@ -218,7 +261,7 @@ export class BithubService extends Service {
                 archetype: "private_message",
                 target_recipients: cleanRecipients
             }, {
-                headers: { "User-Api-Key": this.apiKey, "Content-Type": "application/json" }
+                headers: { "User-Api-Key": apiKey, "Content-Type": "application/json" }
             });
 
             const topicId = response.data.topic_id;

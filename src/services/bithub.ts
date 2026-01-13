@@ -12,6 +12,12 @@ export class BithubService extends Service {
     private apiKey: string | null = null;
     private baseUrl: string = "https://hub.bitwiki.org";
 
+  static async start(runtime: IAgentRuntime): Promise<BithubService> {
+    const service = new BithubService(runtime);
+    await service.initialize(runtime);
+    return service;
+  }
+
     constructor(runtime?: IAgentRuntime) {
         super(runtime);
     }
